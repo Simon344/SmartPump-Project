@@ -1,4 +1,4 @@
-// Written by Kuforiji simon- June 2019
+// Code written by Kuforiji simon- June 2019
 
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
