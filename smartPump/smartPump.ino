@@ -1,0 +1,121 @@
+// Code written by Kuforiji simon- June 2019
+
+#include <WiFi.h>
+#include <BlynkSimpleEsp32.h>
+#include <NewPing.h>
+#include <DHT.h>
+#define DHTTYPE DHT11    
+        
+    //** SENSOR PINS
+    const float PingPin1 = 5;    //     GPIO5,  D1 
+    const float EchoPin1 = 4;    //     GPIO4,  D2
+    #define DHTPIN 2      
+
+    // constants
+    const float MAX_DISTANCE = 400;     //max distance to measure
+    const float depth = 16;            //total depth of tank 1 in cm , from sensor to base inside 
+    const unsigned int Period = 2000;    //period between pings, in milliseconds. i.e  1 munute = 60,000. max 65535. Want longer? use unsigned long
+
+    // Global variables
+    float waterdepth;
+    int iterations = 5;
+    float hum;    // Stores humidity value in percent
+    float temp;   // Stores temperature value in Celcius
+    float duration; // Stores HC-SR04 pulse duration value
+    float distance; // Stores calculated distance in cm
+    float soundsp;  // Stores calculated speed of sound in M/S
+    float soundcm;  // Stores calculated speed of sound in cm/ms
+    
+    // Set password to "" for open networks.
+    char ssid[] = "XXXXX";                                //local wifi network SSID
+    char pass[] = "XXXXX";                              //local network password
+    char auth[] = "XXXXXXXXXXXXXXXXXXXXX";      // You should get Authority Token in your email.  
+   
+    DHT dht(DHTPIN, DHTTYPE);
+    BlynkTimer timer;                                                                   //config timer
+    NewPing sonar(PingPin1, EchoPin1, MAX_DISTANCE);
+
+void sendSensorReadings()
+{
+//**************Readings from Tank 
+
+delay(1000);  // Delay so DHT-22 sensor can stabalize
+   
+    hum = dht.readHumidity();  // Get Humidity value
+    temp= dht.readTemperature();  // Get Temperature value
+    
+    // Calculate the Speed of Sound in M/S
+    soundsp = 331.4 + (0.606 * temp) + (0.0124 * hum);
+    
+    // Convert to cm/ms
+    
+    soundcm = soundsp / 10000;
+    
+  duration = sonar.ping_median(iterations);
+  
+  // Calculate the distance
+  distance= (duration / 2) * soundcm;
+  
+    if (distance >= depth || distance == 0 )  distance = depth;     //check it does not go negative
+    waterdepth = depth - distance;     //calculate the depth of the water   
+
+//***********SEND INFO TO BLYNK
+    Blynk.virtualWrite(V1, waterdepth);          //send depth to Blynk server //ill use this for vl chart
+    //Blynk.virtualWrite(V2, Litres1 / 10);      //send litres to Blynk server, scaled to 1/10 as Blynk only goes up to 9999 and we need up to 16000
+    Blynk.virtualWrite(V6, waterdepth * 60);
+    Blynk.virtualWrite(V3, hum);
+    Blynk.virtualWrite(V4, temp);
+    Blynk.virtualWrite(V5, distance);
+
+    digitalWrite(13, HIGH);      //flash the LED on D7, just to let us know it's running
+    delay(50);
+    digitalWrite(13, LOW);
+    
+    
+//************************* can be commented out, test use only
+    Serial.println();
+    Serial.print("Sound: ");
+    Serial.print(soundsp);
+    Serial.print(" m/s, ");
+    Serial.print("Humid: ");
+    Serial.print(hum);
+    Serial.print(" %, Temp: ");
+    Serial.print(temp);
+    Serial.print(" C, ");
+    Serial.println("Tank water distance: " + String(distance) + " cm");  //print depth
+    Serial.println("Tank water depth: " + String(waterdepth));  //print depth
+    //Serial.println("Tank Litres: " + String(Litres1));        //print litres
+
+//***********************************************   
+ 
+}
+
+void setup() {
+
+   pinMode(13, OUTPUT); 
+       
+  timer.setInterval(Period, sendSensorReadings);    // Setup a function to be called every n seconds
+  delay(10);
+  
+//******************   can be commented out, test only
+    Serial.begin(115200);                           // Open serial console. 
+    Serial.println();
+    Serial.println("Connecting to " + String(ssid));  // Connected to WiFi network
+//****************** 
+
+    Blynk.begin(auth, ssid, pass);
+    delay(20);
+    
+//******************    can be commented out, test only
+  Serial.println(WiFi.localIP());        //this is local IP for this board
+  Serial.println("WiFi connected");
+//******************
+}
+
+void loop() {
+   
+  Blynk.run();
+  timer.run();
+}
+
+// the end!
